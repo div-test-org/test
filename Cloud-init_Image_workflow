@@ -1,0 +1,49 @@
+
+Normal SSH based workflow:
+
+
+* An administrator creates a vSphere VM template and makes sure that the template has a dhcp based ifcfg config file created for primary interface.
+
+* We submit the build from satellite and satellite starts cloning the Skeleton\VMware template into the new VM.
+
+* Once the clone gets completed, The VM gets powered on.
+
+* As soon as the VM gets powered on,
+  * Satellite starts trying to SSH to that VM
+
+  * On the VM itself, The ens160 or ens192 interface should get activated and should run dhclient at the backend to aquire DHCP based IP from Satellite\Capsule.
+
+* Once the IP is aquired and configued on the interface, Satellite will not be able to successfully SSH to the system and execute "Kickstart Default Finish" template.
+
+* As soon as the execution of "Kickstart Default Finish" completes, the system will show up as built in Satellite UI
+
+
+
+
+
+
+
+User-Data|Cloud-init Method:
+
+
+This plug-in was developed to be used with VMWare vSphere provisioning from VMWare templates. vSphere offers the functionality to customize the templates during cloning. This is very handy for changing the network settings of a newly cloned VM. Foreman fully supports this feature via a userdata template. The Foreman handbook has details on how to configure this. The amount of things vSphere allows a user to customize are very limited, though. It's not possible to run a finish script or setup puppet with valid certificates on the new VM. This can be worked around by setting up a two step process: vSphere customization is just used to set up the network config of the host. Cloud-init is used to do the rest of the customization on first boot. Templates for Linux hosts are seeded when you install this plugin. Make sure you associate both CloudInit default and UserData open-vm-tools templates with the operatingsystem of your host and choose them as the default userdata and cloud-init templates.
+
+This leads to this workflow:
+
+An administrator creates a vSphere VM template and makes sure the cloud-init application is installed in the template VM as described below in the client setup section.
+
+
+We submit the build from satellite and satellite starts cloning the Skeleton\VMware template into the new VM.
+
+Satellite creates a new cloned VM in vSphere and passes the userdata template (UserData open-vm-tools) to vSphere if the template is properly assigned to the host.
+
+vSphere adds the customized identity information i.e. the network settings of the new host as defined in the "UserData open-vm-tools" template and this customization\change is actually being done at the backend on the host being build, by Vmware tools or open-vm-tools and then the new VM is getting booted.
+
+The VM then runs cloud-init service and asks Satellite or the smart-proxy\capsule for the cloud-init template (CloudInit default). Satellite can identify the host via the request IP address and render the cloud-init template if it has been properly assinged to the host.
+
+This "Cloudinit default" template is kind of a Finish Template for this method where all post provisioning steps are mentioned i.e. registration, rex configuration, puppet config etc.
+
+Cloud-init signals Satellite that the host has been built successfully. Initial signal goes to port 80 of satellite which then gets redirected to port 443.
+
+
+https://access.redhat.com/documentation/en-us/red_hat_satellite/6.9/html-single/provisioning_guide/index#Provisioning_Virtual_Machines_in_VMware_vSphere-Provisioning_with_cloudinit_and_userdata_templates
